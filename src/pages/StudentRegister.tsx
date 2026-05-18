@@ -1,24 +1,27 @@
 import {
-  Alert,
   Anchor,
   Button,
   Card,
   Center,
   Checkbox,
+  Collapse,
   Container,
   Group,
-  List,
+  Paper,
   Stack,
   Text,
   TextInput,
   Title,
+  UnstyledButton,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
+import { useDisclosure } from "@mantine/hooks";
 import { notifications } from "@mantine/notifications";
 import {
   IconAlertTriangle,
   IconBrandWhatsapp,
   IconCheck,
+  IconChevronDown,
   IconX,
 } from "@tabler/icons-react";
 import { useState } from "react";
@@ -32,6 +35,7 @@ const PHONE_HINT = "Digite só números com DDD; o formato é aplicado automatic
 export default function StudentRegister() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [warningsOpen, { toggle: toggleWarnings }] = useDisclosure(false);
 
   const form = useForm({
     initialValues: {
@@ -122,40 +126,69 @@ export default function StudentRegister() {
             ) : (
               <form onSubmit={form.onSubmit(onSubmit)}>
                 <Stack gap="sm">
-                  {/* Aviso destacado ANTES do formulário: o aluno
-                      precisa ler isso pra entender no que está se
-                      inscrevendo. Não basta uma linha discreta no
-                      consent, esse projeto é piloto experimental e
-                      o bot pode errar. */}
-                  <Alert
-                    color="yellow"
-                    icon={<IconAlertTriangle size={18} />}
-                    title="Antes de continuar, leia com atenção"
+                  {/* Aviso colapsável: o cabeçalho fica sempre visível
+                      pra o aluno saber que existe um aviso, mas o
+                      conteúdo só aparece se ele tocar. Sem List/marker
+                      pra evitar o padding lateral que fica feio no
+                      mobile — usamos bullet manual no Text. */}
+                  <Paper
+                    withBorder
                     radius="md"
+                    style={{
+                      backgroundColor: "var(--mantine-color-yellow-light)",
+                      borderColor: "var(--mantine-color-yellow-light-color)",
+                    }}
                   >
-                    <List size="sm" spacing={4} mt={4}>
-                      <List.Item>
-                        Este é um <b>piloto experimental</b> do projeto de
-                        TCC. O bot vai responder dúvidas sobre o curso,
-                        mas <b>pode errar</b>. Sempre confirme
-                        informações críticas (prazos, regras de TCC,
-                        carga horária) com a coordenação.
-                      </List.Item>
-                      <List.Item>
-                        Suas mensagens serão analisadas <b>de forma
-                        anonimizada</b> para a pesquisa acadêmica. Nenhum
-                        dado pessoal será publicado.
-                      </List.Item>
-                      <List.Item>
-                        O número fica ativo por <b>uma semana</b>; depois
-                        disso, é desativado.
-                      </List.Item>
-                      <List.Item>
-                        Para falar direto com o coordenador a qualquer
-                        momento, envie <b>/coordenador</b> no WhatsApp.
-                      </List.Item>
-                    </List>
-                  </Alert>
+                    <UnstyledButton
+                      onClick={toggleWarnings}
+                      w="100%"
+                      p="sm"
+                      aria-expanded={warningsOpen}
+                    >
+                      <Group justify="space-between" gap="xs" wrap="nowrap">
+                        <Group gap="xs" wrap="nowrap">
+                          <IconAlertTriangle
+                            size={18}
+                            color="var(--mantine-color-yellow-light-color)"
+                          />
+                          <Text size="sm" fw={600}>
+                            Antes de continuar, leia com atenção
+                          </Text>
+                        </Group>
+                        <IconChevronDown
+                          size={16}
+                          style={{
+                            transform: warningsOpen ? "rotate(180deg)" : "none",
+                            transition: "transform 200ms ease",
+                          }}
+                        />
+                      </Group>
+                    </UnstyledButton>
+                    <Collapse expanded={warningsOpen}>
+                      <Stack gap={6} px="sm" pb="sm">
+                        <Text size="sm">
+                          • Este é um <b>piloto experimental</b> do projeto
+                          de TCC. O bot vai responder dúvidas sobre o curso,
+                          mas <b>pode errar</b>. Sempre confirme informações
+                          críticas (prazos, regras de TCC, carga horária)
+                          com a coordenação.
+                        </Text>
+                        <Text size="sm">
+                          • Suas mensagens serão analisadas <b>de forma
+                          anonimizada</b> para a pesquisa acadêmica. Nenhum
+                          dado pessoal será publicado.
+                        </Text>
+                        <Text size="sm">
+                          • O número fica ativo por <b>uma semana</b>;
+                          depois disso, é desativado.
+                        </Text>
+                        <Text size="sm">
+                          • Para falar direto com o coordenador a qualquer
+                          momento, envie <b>/coordenador</b> no WhatsApp.
+                        </Text>
+                      </Stack>
+                    </Collapse>
+                  </Paper>
 
                   <TextInput
                     label="Nome completo"
