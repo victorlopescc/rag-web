@@ -233,9 +233,6 @@ export default function AdminEscalationDetail() {
                   title={
                     <Group gap="xs">
                       <Text fw={500}>Tentativa {a.attempt_number}</Text>
-                      <Badge size="xs" variant="light">
-                        {a.retrieval_strategy}
-                      </Badge>
                       {a.was_fallback && (
                         <Badge size="xs" color="red" variant="light">
                           fallback

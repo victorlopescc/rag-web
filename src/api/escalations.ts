@@ -36,7 +36,6 @@ export interface AttemptOut {
   attempt_number: number;
   question: string;
   answer: string;
-  retrieval_strategy: string;
   was_fallback: boolean;
   feedback_signal: string | null;
   created_at: string;

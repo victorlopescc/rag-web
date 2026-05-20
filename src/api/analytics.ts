@@ -26,34 +26,6 @@ export interface OverviewKPIs {
   median_reply_minutes: number | null;
 }
 
-export interface StrategyRow {
-  strategy: string;
-  attempts: number;
-  fallback: number;
-  fallback_rate: number;
-  explicit_yes: number;
-  explicit_no: number;
-  implicit_rephrase: number;
-  implicit_new_topic: number;
-  timeout: number;
-  avg_latency_ms: number | null;
-}
-
-export interface FeedbackByAttempt {
-  attempt_number: number;
-  explicit_yes: number;
-  explicit_no: number;
-  implicit_rephrase: number;
-  implicit_new_topic: number;
-  timeout: number;
-  no_signal: number;
-}
-
-export interface StrategyReport {
-  per_strategy: StrategyRow[];
-  feedback_by_attempt: FeedbackByAttempt[];
-}
-
 export interface LabelCount {
   label: string;
   count: number;
@@ -133,7 +105,6 @@ export interface TopicsReport {
 
 export type ExportSection =
   | "overview"
-  | "strategies"
   | "escalations"
   | "documents"
   | "timeseries"
@@ -155,14 +126,6 @@ function params(range?: Range) {
 export async function getOverview(range?: Range): Promise<OverviewKPIs> {
   const { data } = await api.get<OverviewKPIs>(
     "/admin/analytics/overview",
-    { params: params(range) },
-  );
-  return data;
-}
-
-export async function getStrategies(range?: Range): Promise<StrategyReport> {
-  const { data } = await api.get<StrategyReport>(
-    "/admin/analytics/strategies",
     { params: params(range) },
   );
   return data;

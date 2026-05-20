@@ -31,7 +31,6 @@ import {
   getDocumentsReport,
   getEscalationsReport,
   getOverview,
-  getStrategies,
   getTimeSeries,
   getTopics,
   type DocumentsReport,
@@ -39,7 +38,6 @@ import {
   type ExportSection,
   type OverviewKPIs,
   type Range,
-  type StrategyReport,
   type TimeSeriesReport,
   type TopicsReport,
 } from "../api/analytics";
@@ -135,12 +133,6 @@ function ExportBtn({ section, range }: { section: ExportSection; range?: Range }
 // Page
 // ---------------------------------------------------------------------------
 
-const STRATEGY_LABELS: Record<string, string> = {
-  default: "Default",
-  query_rewrite: "Query Rewrite",
-  widen_k: "Widen K",
-};
-
 const LABEL_DISPLAY: Record<string, string> = {
   bot_was_wrong: "Bot errou",
   missing_document: "Doc faltando",
@@ -148,15 +140,6 @@ const LABEL_DISPLAY: Record<string, string> = {
   other: "Outro",
   "não rotulada": "Sem rótulo",
 };
-
-const FEEDBACK_COLORS = [
-  { key: "explicit_yes", label: "Explícito sim", color: "teal.6" },
-  { key: "explicit_no", label: "Explícito não", color: "red.6" },
-  { key: "implicit_rephrase", label: "Reformulou", color: "yellow.6" },
-  { key: "implicit_new_topic", label: "Novo tópico", color: "blue.6" },
-  { key: "timeout", label: "Timeout", color: "gray.6" },
-  { key: "no_signal", label: "Sem sinal", color: "gray.4" },
-] as const;
 
 const STATUS_COLOR_LABEL: Record<string, { label: string; color: string }> = {
   pending: { label: "Pendente", color: "yellow" },
@@ -169,7 +152,6 @@ export default function AdminAnalytics() {
   const [loading, setLoading] = useState(false);
 
   const [overview, setOverview] = useState<OverviewKPIs | null>(null);
-  const [strategies, setStrategies] = useState<StrategyReport | null>(null);
   const [escalations, setEscalations] = useState<EscalationsReport | null>(
     null,
   );
@@ -182,16 +164,14 @@ export default function AdminAnalytics() {
   async function reload() {
     setLoading(true);
     try {
-      const [o, s, e, d, t, tp] = await Promise.all([
+      const [o, e, d, t, tp] = await Promise.all([
         getOverview(range),
-        getStrategies(range),
         getEscalationsReport(range),
         getDocumentsReport(range),
         getTimeSeries(range),
         getTopics(range, 25),
       ]);
       setOverview(o);
-      setStrategies(s);
       setEscalations(e);
       setDocs(d);
       setSeries(t);
@@ -213,28 +193,6 @@ export default function AdminAnalytics() {
   }, [preset]);
 
   // --- derived chart data ----------------------------------------------------
-
-  const strategyChartData = useMemo(() => {
-    if (!strategies) return [];
-    return strategies.per_strategy.map((r) => ({
-      strategy: STRATEGY_LABELS[r.strategy] ?? r.strategy,
-      Total: r.attempts,
-      Fallback: r.fallback,
-    }));
-  }, [strategies]);
-
-  const feedbackChartData = useMemo(() => {
-    if (!strategies) return [];
-    return strategies.feedback_by_attempt.map((row) => ({
-      attempt: `Tentativa ${row.attempt_number}`,
-      "Explícito sim": row.explicit_yes,
-      "Explícito não": row.explicit_no,
-      Reformulou: row.implicit_rephrase,
-      "Novo tópico": row.implicit_new_topic,
-      Timeout: row.timeout,
-      "Sem sinal": row.no_signal,
-    }));
-  }, [strategies]);
 
   const labelDonutData = useMemo(() => {
     if (!escalations) return [];
@@ -395,112 +353,7 @@ export default function AdminAnalytics() {
               </Stack>
             </Card>
 
-            {/* ============ SECTION 2 — Retry strategies ============ */}
-            {strategies && (
-              <Card withBorder radius="md" p="lg">
-                <Stack gap="md">
-                  <Group justify="space-between">
-                    <Stack gap={0}>
-                      <Title order={5}>Estratégias de retry</Title>
-                      <Text size="xs" c="dimmed">
-                        Como cada estratégia se comportou e como o aluno
-                        reagiu a cada tentativa.
-                      </Text>
-                    </Stack>
-                    <ExportBtn section="strategies" range={range} />
-                  </Group>
-                  <Grid>
-                    <Grid.Col span={{ base: 12, md: 6 }}>
-                      <Text size="sm" fw={500} mb="xs">
-                        Tentativas por estratégia
-                      </Text>
-                      {strategyChartData.length > 0 ? (
-                        <BarChart
-                          h={240}
-                          data={strategyChartData}
-                          dataKey="strategy"
-                          series={[
-                            { name: "Total", color: "blue.6" },
-                            { name: "Fallback", color: "red.6" },
-                          ]}
-                          withLegend
-                          type="default"
-                        />
-                      ) : (
-                        <Text c="dimmed" size="sm" ta="center" py="xl">
-                          Sem dados no período.
-                        </Text>
-                      )}
-                    </Grid.Col>
-                    <Grid.Col span={{ base: 12, md: 6 }}>
-                      <Text size="sm" fw={500} mb="xs">
-                        Feedback por número da tentativa
-                      </Text>
-                      {feedbackChartData.length > 0 ? (
-                        <BarChart
-                          h={240}
-                          data={feedbackChartData}
-                          dataKey="attempt"
-                          type="stacked"
-                          withLegend
-                          series={FEEDBACK_COLORS.map((f) => ({
-                            name: f.label,
-                            color: f.color,
-                          }))}
-                        />
-                      ) : (
-                        <Text c="dimmed" size="sm" ta="center" py="xl">
-                          Sem dados no período.
-                        </Text>
-                      )}
-                    </Grid.Col>
-                  </Grid>
-
-                  <Table.ScrollContainer minWidth={720}>
-                    <Table striped highlightOnHover verticalSpacing="xs">
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>Estratégia</Table.Th>
-                          <Table.Th>Tentativas</Table.Th>
-                          <Table.Th>Fallback</Table.Th>
-                          <Table.Th>Fallback %</Table.Th>
-                          <Table.Th>Sim</Table.Th>
-                          <Table.Th>Não</Table.Th>
-                          <Table.Th>Reformulou</Table.Th>
-                          <Table.Th>Timeout</Table.Th>
-                          <Table.Th>Lat. média</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {strategies.per_strategy.map((r) => (
-                          <Table.Tr key={r.strategy}>
-                            <Table.Td>
-                              <Badge variant="light">
-                                {STRATEGY_LABELS[r.strategy] ?? r.strategy}
-                              </Badge>
-                            </Table.Td>
-                            <Table.Td>{r.attempts}</Table.Td>
-                            <Table.Td>{r.fallback}</Table.Td>
-                            <Table.Td>{pct(r.fallback_rate)}</Table.Td>
-                            <Table.Td>{r.explicit_yes}</Table.Td>
-                            <Table.Td>{r.explicit_no}</Table.Td>
-                            <Table.Td>{r.implicit_rephrase}</Table.Td>
-                            <Table.Td>{r.timeout}</Table.Td>
-                            <Table.Td>
-                              {r.avg_latency_ms
-                                ? `${Math.round(r.avg_latency_ms)} ms`
-                                : "—"}
-                            </Table.Td>
-                          </Table.Tr>
-                        ))}
-                      </Table.Tbody>
-                    </Table>
-                  </Table.ScrollContainer>
-                </Stack>
-              </Card>
-            )}
-
-            {/* =========== SECTION 3 — Escalations =========== */}
+            {/* =========== SECTION 2 — Escalations =========== */}
             {escalations && (
               <Card withBorder radius="md" p="lg">
                 <Stack gap="md">
@@ -922,7 +775,6 @@ export default function AdminAnalytics() {
                   // Convenience "baixar tudo"
                   const sections: ExportSection[] = [
                     "overview",
-                    "strategies",
                     "escalations",
                     "documents",
                     "timeseries",
