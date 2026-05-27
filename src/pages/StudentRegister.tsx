@@ -1,5 +1,6 @@
 import {
   Anchor,
+  Badge,
   Button,
   Card,
   Center,
@@ -24,18 +25,24 @@ import {
   IconChevronDown,
   IconX,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { registerStudent } from "../api/students";
+import {
+  getRegistrationStatus,
+  registerStudent,
+  type StudentRegisterOut,
+} from "../api/students";
 import { maskMatricula, maskPhone, unmaskDigits } from "../lib/masks";
 
 const PHONE_HINT = "Digite só números com DDD; o formato é aplicado automaticamente.";
 
 export default function StudentRegister() {
   const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState(false);
+  const [result, setResult] = useState<StudentRegisterOut | null>(null);
+  const [activated, setActivated] = useState(false);
   const [warningsOpen, { toggle: toggleWarnings }] = useDisclosure(false);
+  const pollRef = useRef<number | null>(null);
 
   const form = useForm({
     initialValues: {
@@ -58,21 +65,69 @@ export default function StudentRegister() {
     },
   });
 
+  // Polling pra detectar quando o aluno envia a 1ª mensagem pelo WhatsApp.
+  // Roda só enquanto temos um result e ainda não foi ativado. Cada 3s,
+  // até 5 minutos (=100 tentativas) ou até ativar — o que vier antes.
+  useEffect(() => {
+    if (!result || activated) return;
+    if (result.registration_completed) {
+      setActivated(true);
+      return;
+    }
+
+    let attempts = 0;
+    const MAX_ATTEMPTS = 100;
+    const POLL_INTERVAL_MS = 3000;
+
+    const tick = async () => {
+      attempts += 1;
+      if (attempts > MAX_ATTEMPTS) {
+        // Para o polling após 5 min — o aluno ainda pode ativar depois,
+        // mas não vamos ficar consumindo a API indefinidamente.
+        if (pollRef.current) {
+          window.clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        return;
+      }
+      try {
+        const status = await getRegistrationStatus(result.id);
+        if (status.registration_completed) {
+          setActivated(true);
+          if (pollRef.current) {
+            window.clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+        }
+      } catch {
+        // erros de rede silenciosos — próxima tentativa cobre
+      }
+    };
+
+    pollRef.current = window.setInterval(tick, POLL_INTERVAL_MS);
+    return () => {
+      if (pollRef.current) {
+        window.clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [result, activated]);
+
   async function onSubmit(values: typeof form.values) {
     setLoading(true);
     try {
-      await registerStudent({
+      const res = await registerStudent({
         full_name: values.full_name.trim(),
-        // Máscara só visual; backend recebe os dígitos limpos.
         matricula: unmaskDigits(values.matricula),
         phone_number: unmaskDigits(values.phone_number),
         data_consent: values.data_consent,
       });
-      setDone(true);
+      setResult(res);
+      setActivated(res.registration_completed);
       notifications.show({
         color: "teal",
         title: "Cadastro realizado!",
-        message: "Você vai receber uma mensagem de boas-vindas no WhatsApp.",
+        message: "Agora clique no botão abaixo pra iniciar a conversa com o bot.",
         icon: <IconCheck size={18} />,
       });
     } catch (e: unknown) {
@@ -90,6 +145,12 @@ export default function StudentRegister() {
     }
   }
 
+  function resetForm() {
+    form.reset();
+    setResult(null);
+    setActivated(false);
+  }
+
   return (
     <Center mih="100vh" bg="var(--mantine-color-gray-0)" p="md">
       <Container size={460} w="100%">
@@ -105,32 +166,89 @@ export default function StudentRegister() {
               </Text>
             </Stack>
 
-            {done ? (
-              <Stack align="center" py="md">
-                <IconCheck size={48} color="var(--mantine-color-teal-6)" />
-                <Text fw={600}>Cadastro concluído!</Text>
-                <Text c="dimmed" size="sm" ta="center">
-                  Abra o WhatsApp. Você vai receber uma mensagem de boas-vindas
-                  em instantes. A partir daí é só enviar suas perguntas por lá.
-                </Text>
-                <Button
-                  variant="subtle"
-                  onClick={() => {
-                    form.reset();
-                    setDone(false);
-                  }}
-                >
-                  Cadastrar outro aluno
-                </Button>
-              </Stack>
+            {result ? (
+              activated ? (
+                /* Cadastro já ativado — confirmação final */
+                <Stack align="center" py="md" gap="sm">
+                  <IconCheck size={48} color="var(--mantine-color-teal-6)" />
+                  <Text fw={600}>Cadastro ativado! 🎓</Text>
+                  <Text c="dimmed" size="sm" ta="center">
+                    Tudo certo. Continue a conversa no WhatsApp — pode mandar
+                    qualquer dúvida sobre o curso por lá.
+                  </Text>
+                  <Button variant="subtle" onClick={resetForm} mt="sm">
+                    Cadastrar outro aluno
+                  </Button>
+                </Stack>
+              ) : (
+                /* Cadastrado mas ainda precisa enviar a 1ª mensagem */
+                <Stack gap="md">
+                  <Stack align="center" gap="xs">
+                    <IconCheck size={48} color="var(--mantine-color-teal-6)" />
+                    <Text fw={600}>Cadastro criado!</Text>
+                    <Text c="dimmed" size="sm" ta="center">
+                      Falta só <b>um passo</b>: enviar a primeira mensagem pelo
+                      WhatsApp pra ativar o bot.
+                    </Text>
+                  </Stack>
+
+                  <Paper
+                    withBorder
+                    radius="md"
+                    p="md"
+                    style={{
+                      backgroundColor: "var(--mantine-color-teal-light)",
+                      borderColor: "var(--mantine-color-teal-light-color)",
+                    }}
+                  >
+                    <Stack gap="sm">
+                      <Text size="sm">
+                        Clique no botão abaixo. Ele vai abrir o WhatsApp já
+                        com uma mensagem pronta — é só apertar <b>enviar</b> e o
+                        bot vai te responder com as boas-vindas.
+                      </Text>
+                      {result.whatsapp_link ? (
+                        <Button
+                          component="a"
+                          href={result.whatsapp_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          leftSection={<IconBrandWhatsapp size={20} />}
+                          color="teal"
+                          size="md"
+                          fullWidth
+                        >
+                          Abrir WhatsApp e enviar mensagem
+                        </Button>
+                      ) : (
+                        <Text size="xs" c="dimmed">
+                          Link indisponível no momento. Avise o administrador.
+                        </Text>
+                      )}
+                      <Group gap="xs" justify="center">
+                        <Badge variant="dot" color="teal" size="sm">
+                          Aguardando sua primeira mensagem...
+                        </Badge>
+                      </Group>
+                    </Stack>
+                  </Paper>
+
+                  <Text size="xs" c="dimmed" ta="center">
+                    Quando você enviar a mensagem, essa tela atualiza
+                    automaticamente.
+                  </Text>
+
+                  <Button variant="subtle" size="xs" onClick={resetForm}>
+                    Cadastrar outro aluno
+                  </Button>
+                </Stack>
+              )
             ) : (
               <form onSubmit={form.onSubmit(onSubmit)}>
                 <Stack gap="sm">
                   {/* Aviso colapsável: o cabeçalho fica sempre visível
                       pra o aluno saber que existe um aviso, mas o
-                      conteúdo só aparece se ele tocar. Sem List/marker
-                      pra evitar o padding lateral que fica feio no
-                      mobile — usamos bullet manual no Text. */}
+                      conteúdo só aparece se ele tocar. */}
                   <Paper
                     withBorder
                     radius="md"
